@@ -13,7 +13,8 @@ public class Main {
 
   @BeforeClass
   public static void setup() {
-    container = new GenericContainer<>("echo");
+    container = new GenericContainer<>("hashicorp/http-echo");
+    log.info("created container");
   }
 
   @Test
