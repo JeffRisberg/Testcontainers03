@@ -1,47 +1,122 @@
 package com.company;
 
 import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static org.testng.Assert.fail;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.IOException;
+import com.google.gson.*;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import org.testcontainers.utility.DockerImageName;
+import org.testng.Assert;
 import org.testng.annotations.*;
 
 @Slf4j
 public class Main {
-
   public static final MediaType JSON = okhttp3.MediaType.parse("application/json; charset=utf-8");
+  public static final MediaType TEXT = okhttp3.MediaType.parse("text/plain");
+
+  public static final JsonParser jsonParser = new JsonParser();
+  public static final OkHttpClient client = new OkHttpClient();
 
   static GenericContainer<?> container;
+  static String host;
+  static String port;
 
   @BeforeClass
   public static void setup() {
     container =
-        new GenericContainer<>(DockerImageName.parse("ealen/echo-server"))
-            .withExposedPorts(8080, 8081)
-            .withLogConsumer(new Slf4jLogConsumer(log));
+        new GenericContainer<>(DockerImageName.parse("ealen/echo-server")).withExposedPorts(80);
 
     container.start();
-    log.info("created container");
+
+    host = container.getContainerIpAddress();
+    port = container.getFirstMappedPort().toString();
   }
 
   @AfterClass
   public static void shutdown() {
     container.stop();
-    log.info("stopped container");
   }
 
   @Test
-  public void sampleTestMethod1() throws IOException {
+  public void simpleGetTest() {
+    String url = "http://" + host + ":" + port;
 
-    ObjectMapper objectMapper = new ObjectMapper();
-    JsonParser jsonParser = new JsonParser();
+    Request request = new Request.Builder().url(url).get().build();
+
+    try (Response response = client.newCall(request).execute()) {
+      JsonObject result = (JsonObject) jsonParser.parse(response.body().string());
+      JsonObject resultRequest = (JsonObject) result.get("request");
+      JsonObject resultBody = (JsonObject) resultRequest.get("body");
+
+      Assert.assertNotNull(resultBody);
+      Assert.assertEquals(resultBody.size(), 0);
+    } catch (Exception e) {
+      e.printStackTrace();
+      fail();
+    }
+  }
+
+  @Test
+  public void simplePostTest() {
+    final String message = "Attack fortress at dawn";
+
+    String url = "http://" + host + ":" + port;
+
+    RequestBody body = RequestBody.create(message, TEXT);
+
+    Request request =
+        new Request.Builder().url(url).header(CONTENT_TYPE, TEXT.toString()).post(body).build();
+
+    try (Response response = client.newCall(request).execute()) {
+      JsonObject result = (JsonObject) jsonParser.parse(response.body().string());
+      JsonObject resultRequest = (JsonObject) result.get("request");
+      JsonElement resultBody = resultRequest.get("body");
+
+      Assert.assertEquals(resultBody.getAsString(), message);
+    } catch (Exception e) {
+      e.printStackTrace();
+      fail();
+    }
+  }
+
+  @Test
+  public void simpleJsonPostTest() {
+    final String APPKEY = "A12345678";
+    final String TOKEN = "qwertyuiop";
+
+    String url = "http://" + host + ":" + port;
+
+    JsonObject bodyJson = new JsonObject();
+    bodyJson.addProperty("appKey", APPKEY);
+    bodyJson.addProperty("token", TOKEN);
+
+    RequestBody body = RequestBody.create(bodyJson.toString(), JSON);
+
+    Request request =
+        new Request.Builder().url(url).header(CONTENT_TYPE, JSON.toString()).post(body).build();
+
+    try (Response response = client.newCall(request).execute()) {
+      JsonObject result = (JsonObject) jsonParser.parse(response.body().string());
+      JsonObject resultRequest = (JsonObject) result.get("request");
+      JsonObject resultBody = (JsonObject) resultRequest.get("body");
+
+      Assert.assertNotNull(resultBody);
+      Assert.assertEquals(resultBody.get("appKey").getAsString(), APPKEY);
+      Assert.assertEquals(resultBody.get("token").getAsString(), TOKEN);
+    } catch (Exception e) {
+      e.printStackTrace();
+      fail();
+    }
+  }
+
+  @Test
+  public void complexJsonPostTest() {
+    final int HEIGHT = 400;
+    final int WIDTH = 500;
+
+    String url = "http://" + host + ":" + port;
 
     JsonObject accessParamMap = new JsonObject();
     accessParamMap.addProperty("buttonElementId", "submit_button");
@@ -55,25 +130,25 @@ public class Main {
 
     JsonObject bodyJson = new JsonObject();
     bodyJson.add("accessParamMap", accessParamMap);
-    bodyJson.addProperty("appKey", "12345678");
-    bodyJson.addProperty("token", "qwertyuiop");
+    bodyJson.addProperty("height", HEIGHT);
+    bodyJson.addProperty("width", WIDTH);
 
-    RequestBody body = RequestBody.create(JSON, bodyJson.toString());
-
-    String host = container.getContainerIpAddress();
-    String port = container.getFirstMappedPort().toString();
-
-    String url = "http://" + host + ":" + port;
-
-    // rest calls to container
-    OkHttpClient client = new OkHttpClient();
+    RequestBody body = RequestBody.create(bodyJson.toString(), JSON);
 
     Request request =
         new Request.Builder().url(url).header(CONTENT_TYPE, JSON.toString()).post(body).build();
 
     try (Response response = client.newCall(request).execute()) {
-      String x = response.body().string();
-      System.out.println(x);
+      JsonObject result = (JsonObject) jsonParser.parse(response.body().string());
+      JsonObject resultRequest = (JsonObject) result.get("request");
+      JsonObject resultBody = (JsonObject) resultRequest.get("body");
+
+      Assert.assertNotNull(resultBody);
+      Assert.assertEquals(resultBody.get("height").getAsInt(), HEIGHT);
+      Assert.assertEquals(resultBody.get("width").getAsInt(), WIDTH);
+    } catch (Exception e) {
+      e.printStackTrace();
+      fail();
     }
   }
 }
